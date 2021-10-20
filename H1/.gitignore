@@ -1,0 +1,13 @@
+client/src/client_exec
+server/src/server_exec
+client-server
+server-client
+server/src/CMakeFiles
+server/src/cmake_install.cmake
+server/src/CMakeCache.txt
+server/src/Makefile
+client/src/CMakeFiles
+client/src/cmake_install.cmake
+client/src/CMakeCache.txt
+client/src/Makefile
+.vscode
