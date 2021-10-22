@@ -9,7 +9,7 @@
 
 #include <vector>
 #include <string>
-#include "../include/UserProfile.hpp"
+#include "../include/UserProfile.h"
 
 std::vector<std::string> knownUsers;
 
@@ -82,5 +82,11 @@ std::string UserProfile::GetUsername() const {
 void UserProfile::logoutUser() {
     this->username.clear();
     this->isLogged = false;
+}
+
+UserProfile& UserProfile::operator= (UserProfile user2) {
+    this->username = user2.username;
+    this->isLogged = user2.isLogged;
+    return (*this);
 }
 

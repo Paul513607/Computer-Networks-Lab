@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
         handle_error("Error at open", 1);
     if (-1 == (fd_read = open(FIFO_REL_PATH2, O_RDONLY)))
         handle_error("Error at open", 2);
+    std::cout << "\nWelcome!";
 
     while (isOpenSession == true) {
         std::cout << "\nInput a command: ";
@@ -46,8 +47,7 @@ int main(int argc, char* argv[]) {
         if (-1 == read(fd_read, &len, sizeof(int)))
             handle_error("Error at read", 1);
         cmd_output = new char[len + 1];
-        int rd;
-        if (-1 == (rd = read(fd_read, cmd_output, len)))
+        if (-1 == read(fd_read, cmd_output, len))
             handle_error("Error at read", 2);
 
         if (strcmp(cmd_output, "quit_current_session") == 0)

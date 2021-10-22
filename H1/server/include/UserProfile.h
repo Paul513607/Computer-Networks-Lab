@@ -12,6 +12,7 @@ public:
     void SetUsername(const char* username);
     std::string GetUsername() const;
     void logoutUser();
+    UserProfile& operator= (UserProfile user2);
     friend std::string getProcessInformation(const char* pid_cstr);
     friend bool isKnownUser(const char* username);
 };
