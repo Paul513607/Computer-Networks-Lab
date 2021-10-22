@@ -18,7 +18,7 @@
 #define FIFO_REL_PATH1 "../../client-server"
 #define FIFO_REL_PATH2 "../../server-client"
 
-void create_fifo(const char* fifo_name);
+void create_fifo(const char* fifo_name, int err_no);
 void server_init(int &fd_read, int &fd_write);
 void process_command(std::vector<std::string> &cmdlets, std::string command);
 
@@ -28,15 +28,18 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> cmdlets;
     std::string command_str, msg_back_str;
     char *command;
-    int fd_read, fd_write;
+    int fd_read, fd_write, rd = 0;
     int len, arr_size;
     bool serverOpen = true;
 
     server_init(fd_read, fd_write);
 
     while (serverOpen) {
-        if (-1 == read(fd_read, &len, sizeof(int)))
-            handle_error("Error at read", 1);
+        len = rd = 0;
+        while (rd <= 0) {
+            if (-1 == (rd = read(fd_read, &len, sizeof(int))))
+                handle_error("Error at read", 1);
+        }
         command = new char[len + 1];
         if (-1 == read(fd_read, command, len))
             handle_error("Error at read", 2);
@@ -93,26 +96,26 @@ int main(int argc, char* argv[]) {
         
         write_len_str(fd_write, len, msg_back_str);
     }
+    
     close(fd_read);
     close(fd_write);
+    remove(FIFO_REL_PATH1);
+    remove(FIFO_REL_PATH2);
     return 0;
 }
 
-void create_fifo(const char* fifo_name) {
+void create_fifo(const char* fifo_name, int err_no) {
     if (-1 == mkfifo(fifo_name, 0666)) {
         if (errno == EEXIST)
-            fprintf(stderr, "Fifo file already exists!\n");
+            fprintf(stderr, "Fifo file %d already exists!\n", err_no);
         else 
-            handle_error("Error at mkfifo", 1);
+            handle_error("Error at mkfifo", err_no);
     }
 }
 
 void server_init(int &fd_read, int &fd_write) {
-    remove(FIFO_REL_PATH1);
-    remove(FIFO_REL_PATH2);
-
-    create_fifo(FIFO_REL_PATH1);
-    create_fifo(FIFO_REL_PATH2);
+    create_fifo(FIFO_REL_PATH1, 1);
+    create_fifo(FIFO_REL_PATH2, 2);
 
     getKnownUsers();
 

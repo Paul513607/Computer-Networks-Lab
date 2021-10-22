@@ -1,7 +1,6 @@
 #pragma once
 #define handle_error(msg, i) { \
             fprintf(stderr, "%s %d\n", msg, i); \
-            exit(i); \
         } \
 
 void write_len_str(int fd, int len, std::string out_txt);

@@ -16,15 +16,16 @@
 #include "../include/UserProfile.h"
 #include "../include/Command.h"
 
-int glob_err_count = 0;
+int glob_write_err_count = 3;
 
 void write_len_str(int fd, int len, std::string out_txt) {
-    glob_err_count++;
+    glob_write_err_count++;
     len = out_txt.length() + 1;
     if (-1 == write(fd, &len, sizeof(int)))
-        handle_error("Error at write", glob_err_count);
+        handle_error("Error at write", glob_write_err_count);
+    glob_write_err_count++;
     if (-1 == write(fd, out_txt.c_str(), len))
-        handle_error("Error at write", glob_err_count);
+        handle_error("Error at write", glob_write_err_count);
 }
 
 Command::~Command() {
@@ -61,10 +62,10 @@ void HelpCommand::Execute() {
     default:
         close(pipe_fd_child_parent[1]);
         if (-1 == read(pipe_fd_child_parent[0], &len, sizeof(int)))
-            handle_error("Error at read", 5);
+            handle_error("Error at read", 3);
         msg_back = new char[len + 1];
         if (-1 == read(pipe_fd_child_parent[0], msg_back, len))
-            handle_error("Error at read", 5);
+            handle_error("Error at read", 4);
         this->msg_back_str = msg_back;
         delete msg_back;
         close(pipe_fd_child_parent[0]);
@@ -101,10 +102,10 @@ void LoginCommand::Execute() {
         isLoggedIn = this->user.isLogged;
 
         if (-1 == read(socket_fd[1], &len, sizeof(int)))
-            handle_error("Error at read", 7);
+            handle_error("Error at read", 5);
         username = new char[len + 1];
         if (-1 == read(socket_fd[1], username, len))
-            handle_error("Error at read", 7);
+            handle_error("Error at read", 6);
         
         if (!this->user.isLogged) {
             this->user.loginUser(username);
@@ -125,13 +126,13 @@ void LoginCommand::Execute() {
         write_len_str(socket_fd[1], len, text_parent);
 
         if (-1 == write(socket_fd[1], &isLoggedIn, sizeof(bool)))
-            handle_error("Error at write", 7);
+            handle_error("Error at write", 1);
         if (wasSwapped) {
             len = strlen(username) + 1;
             if (-1 == write(socket_fd[1], &len, sizeof(len)))
-                handle_error("Error at write", 7);
+                handle_error("Error at write", 2);
             if (-1 == write(socket_fd[1], username, len))
-                handle_error("Error at write", 7);
+                handle_error("Error at write", 3);
         }
         delete username;
         close(socket_fd[1]);
@@ -144,22 +145,22 @@ void LoginCommand::Execute() {
         write_len_str(socket_fd[0], len, this->username_login);
 
         if (-1 == read(socket_fd[0], &len, sizeof(int)))
-            handle_error("Error at read", 6);
+            handle_error("Error at read", 7);
         msg_back = new char[len + 1];
         if (-1 == read(socket_fd[0], msg_back, len))
-            handle_error("Error at read", 6);
+            handle_error("Error at read", 8);
         if (-1 == read(socket_fd[0], &isLoggedIn, sizeof(bool)))
-            handle_error("Error at read", 6);
+            handle_error("Error at read", 9);
 
         if (isLoggedIn == user.isLogged)
             wasSwapped = false;
         this->user.isLogged = isLoggedIn;
         if (wasSwapped) {
             if (-1 == read(socket_fd[0], &len, sizeof(int)))
-                handle_error("Error at read", 6);
+                handle_error("Error at read", 10);
             username = new char[len + 1];
             if (-1 == read(socket_fd[0], username, len))
-                handle_error("Error at read", 6);
+                handle_error("Error at read", 11);
             this->user.SetUsername(username);
             delete username;
         }
@@ -177,34 +178,34 @@ void GetLoggedUsersCommand::Execute() {
     pid_t pid_child;
     int pipe_fd_child_parent[2], len = 0;
     std::string text_parent;
-    struct utmp *ut;
+    struct utmp *entry;
     struct tm *login_time;
     time_t timestamp;
     char* msg_back = nullptr, buffer[100];
     if (-1 == pipe(pipe_fd_child_parent))
-        handle_error("Error at pipe", 1);
+        handle_error("Error at pipe", 2);
     pid_child = fork();
     switch (pid_child) 
     {
     case -1:
-        handle_error("Error at fork", 1);
+        handle_error("Error at fork", 3);
     case 0:
         close(pipe_fd_child_parent[0]);
         if (this->user.isLogged) {
             int count_users = 0;
             text_parent = "Users logged onto the operating system:\n";
 
-            while ((ut = getutent())) {
+            while ((entry = getutent()) != NULL) {
                 count_users++;
-                timestamp = ut->ut_tv.tv_sec;
+                timestamp = entry->ut_tv.tv_sec;
                 login_time = localtime(&timestamp);
 
-                strftime(buffer, sizeof(buffer), "%A %Y-%m-%d %H:%M:%S %Z", login_time);
+                strftime(buffer, sizeof(buffer), "%A %d-%m-%Y %H:%M:%S %Z", login_time);
 
                 text_parent += "\nUsername: ";
-                text_parent += ut->ut_user;
+                text_parent += entry->ut_user;
                 text_parent += "\nHostname for remote login: ";
-                text_parent += ut->ut_host;
+                text_parent += entry->ut_host;
                 text_parent += "\nTime entry was made: ";
                 text_parent += buffer;
                 text_parent += "\n";
@@ -226,10 +227,10 @@ void GetLoggedUsersCommand::Execute() {
         close(pipe_fd_child_parent[1]);
 
         if (-1 == read(pipe_fd_child_parent[0], &len, sizeof(int)))
-            handle_error("Error at read", 5);
+            handle_error("Error at read", 12);
         msg_back = new char[len + 1];
         if (-1 == read(pipe_fd_child_parent[0], msg_back, len))
-            handle_error("Error at read", 5);
+            handle_error("Error at read", 13);
             
         this->msg_back_str = msg_back;
         delete msg_back;
@@ -248,20 +249,20 @@ void GetProcInfoCommand::Execute() {
     std::string text_parent;
     char *msg_back = nullptr, *pid_cstr = nullptr;
     if (-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, socket_fd))
-        handle_error("Error at socketpair", 1);
+        handle_error("Error at socketpair", 2);
     pid_child = fork();
 
     switch (pid_child)
     {
     case -1:
-        handle_error("Error at fork", 2);
+        handle_error("Error at fork", 4);
     case 0:
         close(socket_fd[0]);
         if (-1 == read(socket_fd[1], &len, sizeof(int)))
-            handle_error("Error at read", 7);
+            handle_error("Error at read", 14);
         pid_cstr = new char[len + 1];
         if (-1 == read(socket_fd[1], pid_cstr, len))
-            handle_error("Error at read", 7);
+            handle_error("Error at read", 15);
         
         if (user.isLogged)
             text_parent = getProcessInformation(pid_cstr);
@@ -280,10 +281,10 @@ void GetProcInfoCommand::Execute() {
         write_len_str(socket_fd[0], len, pid_str);
 
         if (-1 == read(socket_fd[0], &len, sizeof(int)))
-            handle_error("Error at read", 6);
+            handle_error("Error at read", 16);
         msg_back = new char[len + 1];
         if (-1 == read(socket_fd[0], msg_back, len))
-            handle_error("Error at read", 6);
+            handle_error("Error at read", 17);
         msg_back_str = msg_back;
         delete msg_back;
         close(socket_fd[0]);

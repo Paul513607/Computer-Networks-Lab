@@ -28,9 +28,10 @@ int main(int argc, char* argv[]) {
         handle_error("Error at open", 1);
     if (-1 == (fd_read = open(FIFO_REL_PATH2, O_RDONLY)))
         handle_error("Error at open", 2);
+
     std::cout << "\nWelcome!";
 
-    while (isOpenSession == true) {
+    while (isOpenSession) {
         std::cout << "\nInput a command: ";
         std::getline(std::cin, command);
 
