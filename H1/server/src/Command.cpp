@@ -8,16 +8,13 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <time.h>
+#include <utmp.h>
 
 #include <vector>
 #include <string>
 #include "../include/UserProfile.h"
 #include "../include/Command.h"
-
-#define handle_error(msg, i) {\
-            fprintf(stderr, "%s %d\n", msg, i); \
-            exit(i); \
-        } \
 
 int glob_err_count = 0;
 
@@ -180,7 +177,10 @@ void GetLoggedUsersCommand::Execute() {
     pid_t pid_child;
     int pipe_fd_child_parent[2], len = 0;
     std::string text_parent;
-    char* msg_back = nullptr;
+    struct utmp *ut;
+    struct tm *login_time;
+    time_t timestamp;
+    char* msg_back = nullptr, buffer[100];
     if (-1 == pipe(pipe_fd_child_parent))
         handle_error("Error at pipe", 1);
     pid_child = fork();
@@ -190,11 +190,32 @@ void GetLoggedUsersCommand::Execute() {
         handle_error("Error at fork", 1);
     case 0:
         close(pipe_fd_child_parent[0]);
+        if (this->user.isLogged) {
+            int count_users = 0;
+            text_parent = "Users logged onto the operating system:\n";
 
-        if (this->user.isLogged)
-            text_parent = user.GetUsername();
-        else 
+            while ((ut = getutent())) {
+                count_users++;
+                timestamp = ut->ut_tv.tv_sec;
+                login_time = localtime(&timestamp);
+
+                strftime(buffer, sizeof(buffer), "%A %Y-%m-%d %H:%M:%S %Z", login_time);
+
+                text_parent += "\nUsername: ";
+                text_parent += ut->ut_user;
+                text_parent += "\nHostname for remote login: ";
+                text_parent += ut->ut_host;
+                text_parent += "\nTime entry was made: ";
+                text_parent += buffer;
+                text_parent += "\n";
+            }
+
+            text_parent += "\nNumber of logged users: ";
+            text_parent += std::to_string(count_users);
+        }
+        else {
             text_parent = "Can't run this command : no user logged in";
+        }
 
         write_len_str(pipe_fd_child_parent[1], len, text_parent);
 

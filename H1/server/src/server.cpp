@@ -7,10 +7,8 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <sys/socket.h>
 #include <errno.h>
-#include <utmp.h>
 
 #include <vector>
 #include <string>
@@ -20,21 +18,16 @@
 #define FIFO_REL_PATH1 "../../client-server"
 #define FIFO_REL_PATH2 "../../server-client"
 
-#define handle_error(msg, i) {\
-            fprintf(stderr, "%s %d\n", msg, i); \
-            exit(i); \
-        } \
-
-void process_command(std::vector<std::string> &cmdlets, std::string command);
 void create_fifo(const char* fifo_name);
 void server_init(int &fd_read, int &fd_write);
+void process_command(std::vector<std::string> &cmdlets, std::string command);
 
 int main(int argc, char* argv[]) {
     UserProfile user;
     Command *command_obj = nullptr;
-    char *command;
-    std::string command_str, msg_back_str;
     std::vector<std::string> cmdlets;
+    std::string command_str, msg_back_str;
+    char *command;
     int fd_read, fd_write;
     int len, arr_size;
     bool serverOpen = true;
@@ -76,7 +69,6 @@ int main(int argc, char* argv[]) {
             command_obj->Execute();
         }
         else if (arr_size == 1 && cmdlets[0] == "logout") {     // logout
-            std::cout << user.isLogged << " " << user.GetUsername() << '\n';
             if (user.isLogged) {
                     user.logoutUser();
                     msg_back_str = "Sucessfully logged out user";
@@ -89,7 +81,7 @@ int main(int argc, char* argv[]) {
                 user.logoutUser();
             msg_back_str = "quit_current_session";
         }
-        else {
+        else {      // unknown command
             msg_back_str = "Unknown command '" + command_str + "'. Specify 'help' for usage";
         }
 
@@ -101,23 +93,9 @@ int main(int argc, char* argv[]) {
         
         write_len_str(fd_write, len, msg_back_str);
     }
+    close(fd_read);
+    close(fd_write);
     return 0;
-}
-
-void process_command(std::vector<std::string> &cmdlets, std::string command) {
-    int space_index = 0;
-    while (space_index != -1) {
-        space_index = command.find_first_of(' ');
-        if (space_index != -1) {
-            cmdlets.push_back(command.substr(0, space_index));
-            command.erase(0, space_index + 1);
-        }
-    }
-    cmdlets.push_back(command);
-    fflush(stdout);
-    for (auto cmdlet : cmdlets)
-        std::cout << cmdlet << " ";
-    std::cout << '\n';
 }
 
 void create_fifo(const char* fifo_name) {
@@ -142,4 +120,17 @@ void server_init(int &fd_read, int &fd_write) {
         handle_error("Error at open", 1);
     if (-1 == (fd_write = open(FIFO_REL_PATH2, O_WRONLY)))
         handle_error("Error at open", 2);
+}
+
+void process_command(std::vector<std::string> &cmdlets, std::string command) {
+    int space_index = 0;
+    while (space_index != -1) {
+        space_index = command.find_first_of(' ');
+        if (space_index != -1) {
+            cmdlets.push_back(command.substr(0, space_index));
+            command.erase(0, space_index + 1);
+        }
+    }
+    cmdlets.push_back(command);
+    fflush(stdout);
 }

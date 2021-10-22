@@ -6,11 +6,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
 #include <errno.h>
 
-#include <vector>
 #include <string>
 
 #define FIFO_REL_PATH1 "../../client-server"
@@ -56,6 +53,8 @@ int main(int argc, char* argv[]) {
             std::cout << '\n' << cmd_output << '\n';
         delete cmd_output;
     }
+    close(fd_read);
+    close(fd_write);
     std::cout << "Done!\n";
     return 0;
 }
