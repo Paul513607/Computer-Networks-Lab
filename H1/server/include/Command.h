@@ -49,6 +49,7 @@ private:
 public:
     GetProcInfoCommand() {};
     GetProcInfoCommand(UserProfile user, std::string pid_str);
+    ~GetProcInfoCommand();
     void Execute() override;
 };
 

@@ -245,6 +245,11 @@ GetProcInfoCommand::GetProcInfoCommand(UserProfile user, std::string pid_str) {
     this->user = user;
 }
 
+GetProcInfoCommand::~GetProcInfoCommand() {
+    this->msg_back_str.clear();
+    this->pid_str.clear();
+}
+
 void GetProcInfoCommand::Execute() {
     pid_t pid_child;
     int socket_fd[2], len = 0;
