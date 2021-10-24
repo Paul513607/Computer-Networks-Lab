@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
 
     while (serverOpen) {
         len = rd = 0;
-        while (rd <= 0) {
+        while (rd <= 0) {           // hold fifo open until client starts
             if (-1 == (rd = read(fd_read, &len, sizeof(int))))
                 handle_error("Error at read", 1);
         }

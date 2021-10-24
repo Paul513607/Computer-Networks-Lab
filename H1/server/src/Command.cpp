@@ -194,6 +194,7 @@ void GetLoggedUsersCommand::Execute() {
         if (this->user.isLogged) {
             int count_users = 0;
             text_parent = "Users logged onto the operating system:\n";
+            setutent();
 
             while ((entry = getutent()) != NULL) {
                 count_users++;
@@ -211,6 +212,7 @@ void GetLoggedUsersCommand::Execute() {
                 text_parent += "\n";
             }
 
+            endutent();
             text_parent += "\nNumber of logged users: ";
             text_parent += std::to_string(count_users);
         }
