@@ -51,7 +51,7 @@ void HelpCommand::Execute() {
     case 0:
         close(pipe_fd_child_parent[0]);
 
-        text_parent = "Log in/out:\n\tlogin : <username>\tLogin as <username> in the current session\n\tlogout\t\t\tLogout from current session (requires valid login)\nGet information:\n\tget-logged-user\t\tGet informaton about the logged user (requires valid login)\n\tget-proc-info : <pid>\tGet information about the process with pid <pid> (requires valid login)\nMiscellaneous:\n\tquit\t\t\tQuit the current session\n\thelp\t\t\tSpecify ussage (commands)";
+        text_parent = "Log in/out:\n\tlogin : <username>\tLogin as <username> in the current session\n\tlogout\t\t\tLogout from current session (requires valid login)\n\tget-current-client\tGet current logged client to the server (requires valid login)\nGet information:\n\tget-logged-user\t\tGet informaton about the logged user (requires valid login)\n\tget-proc-info : <pid>\tGet information about the process with pid <pid> (requires valid login)\nMiscellaneous:\n\tquit\t\t\tQuit the current session\n\thelp\t\t\tSpecify ussage (commands)";
         
         write_len_str(pipe_fd_child_parent[1], len, text_parent);
         
@@ -161,7 +161,7 @@ void LoginCommand::Execute() {
             username = new char[len + 1];
             if (-1 == read(socket_fd[0], username, len))
                 handle_error("Error at read", 11);
-            this->user.SetUsername(username);
+            this->user.setUsername(username);
             delete username;
         }
         this->msg_back_str = msg_back;
@@ -290,5 +290,50 @@ void GetProcInfoCommand::Execute() {
         msg_back_str = msg_back;
         delete msg_back;
         close(socket_fd[0]);
+    }
+}
+
+GetCurrentLoggedClientCommand::GetCurrentLoggedClientCommand(UserProfile user) {
+    this->user = user;
+}
+
+void GetCurrentLoggedClientCommand::Execute() {
+    pid_t pid_child;
+    int pipe_fd_child_parent[2], len = 0;
+    std::string text_parent;
+    char* msg_back = nullptr;
+    if (-1 == pipe(pipe_fd_child_parent))
+        handle_error("Error at pipe", 3);
+    pid_child = fork();
+    switch (pid_child) 
+    {
+    case -1:
+        handle_error("Error at fork", 5);
+    case 0:
+        close(pipe_fd_child_parent[0]);
+
+        if (user.isLogged) {
+            text_parent = "Current logged client: " + user.getUsername();
+        }
+        else {
+            text_parent = "No client is currently logged in to the server";
+        }
+
+        write_len_str(pipe_fd_child_parent[1], len, text_parent);
+        
+        close(pipe_fd_child_parent[1]);
+        text_parent.clear();
+
+        exit(0);    
+    default:
+        close(pipe_fd_child_parent[1]);
+        if (-1 == read(pipe_fd_child_parent[0], &len, sizeof(int)))
+            handle_error("Error at read", 18);
+        msg_back = new char[len + 1];
+        if (-1 == read(pipe_fd_child_parent[0], msg_back, len))
+            handle_error("Error at read", 19);
+        this->msg_back_str = msg_back;
+        delete msg_back;
+        close(pipe_fd_child_parent[0]);
     }
 }

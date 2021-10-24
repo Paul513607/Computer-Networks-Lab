@@ -10,8 +10,8 @@ public:
     UserProfile(std::string username);
     ~UserProfile();
     void loginUser(const char* username);
-    void SetUsername(const char* username);
-    std::string GetUsername() const;
+    void setUsername(const char* username);
+    std::string getUsername() const;
     void logoutUser();
     UserProfile& operator= (UserProfile user2);
     friend std::string getProcessInformation(const char* pid_cstr);

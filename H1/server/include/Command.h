@@ -51,3 +51,11 @@ public:
     GetProcInfoCommand(UserProfile user, std::string pid_str);
     void Execute() override;
 };
+
+class GetCurrentLoggedClientCommand : public Command
+{
+public:
+    GetCurrentLoggedClientCommand() {};
+    GetCurrentLoggedClientCommand(UserProfile user);
+    void Execute() override;
+};

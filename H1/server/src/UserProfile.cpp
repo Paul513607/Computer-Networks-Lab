@@ -71,11 +71,11 @@ void UserProfile::loginUser(const char* username) {
     }
 }
 
-void UserProfile::SetUsername(const char* username) {
+void UserProfile::setUsername(const char* username) {
     this->username = username;
 }
 
-std::string UserProfile::GetUsername() const {
+std::string UserProfile::getUsername() const {
     return this->username;
 }
 

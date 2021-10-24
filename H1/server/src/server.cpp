@@ -71,6 +71,10 @@ int main(int argc, char* argv[]) {
             command_obj = new GetProcInfoCommand(user, cmdlets[2]);
             command_obj->Execute();
         }
+        else if (arr_size == 1 && cmdlets[0] == "get-current-client") {     // get-current-client
+            command_obj = new GetCurrentLoggedClientCommand(user);
+            command_obj->Execute();
+        }
         else if (arr_size == 1 && cmdlets[0] == "logout") {     // logout
             if (user.isLogged) {
                     user.logoutUser();
@@ -81,8 +85,8 @@ int main(int argc, char* argv[]) {
         }
         else if (arr_size == 1 && cmdlets[0] == "quit") {       // quit
             if (user.isLogged)
-                user.logoutUser();
-            msg_back_str = "quit_current_session";
+                user.logoutUser();                      // we send quit to the server in case we want to stop the server when the client stops
+            msg_back_str = "quit_current_session";      // in that case we do serverOpen = false;
         }
         else {      // unknown command
             msg_back_str = "Unknown command '" + command_str + "'. Specify 'help' for usage";
