@@ -51,7 +51,7 @@ void HelpCommand::Execute() {
     case 0:
         close(pipe_fd_child_parent[0]);
 
-        text_parent = "Log in/out:\n\tlogin : <username>\tLogin as <username> in the current session\n\tlogout\t\t\tLogout from current session (requires valid login)\n\tget-current-client\tGet current logged client to the server (requires valid login)\nGet information:\n\tget-logged-user\t\tGet informaton about the logged user (requires valid login)\n\tget-proc-info : <pid>\tGet information about the process with pid <pid> (requires valid login)\nMiscellaneous:\n\tquit\t\t\tQuit the current session\n\thelp\t\t\tSpecify ussage (commands)";
+        text_parent = "Log in/out:\n\tlogin : <username>\tLogin as <username> in the current session\n\tlogout\t\t\tLogout from current session (requires valid login)\n\tget-current-client\tGet the username of the current logged client to the server (requires valid login)\nGet information:\n\tget-logged-user\t\tGet informaton about the logged user (requires valid login)\n\tget-proc-info : <pid>\tGet information about the process with pid <pid> (requires valid login)\nMiscellaneous:\n\tquit\t\t\tQuit the current session\n\thelp\t\t\tSpecify ussage (commands)";
         
         write_len_str(pipe_fd_child_parent[1], len, text_parent);
         
@@ -318,7 +318,7 @@ void GetCurrentLoggedClientCommand::Execute() {
         close(pipe_fd_child_parent[0]);
 
         if (user.isLogged) {
-            text_parent = "Current logged client: " + user.getUsername();
+            text_parent = "Current logged client username: " + user.getUsername();
         }
         else {
             text_parent = "No client is currently logged in to the server";

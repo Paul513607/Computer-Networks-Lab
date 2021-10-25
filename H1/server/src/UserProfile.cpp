@@ -33,7 +33,6 @@ bool isKnownUser(const char* username) {
 
 std::string getProcessInformation(const char* pid_cstr) {
     std::string proc_status_file_path, msg_back, line_in_file, info, pid_str(pid_cstr);
-    int fdr, index;
     proc_status_file_path = "/proc/" + pid_str + "/status";
     std::ifstream fin(proc_status_file_path);
     if (fin.fail()) {
