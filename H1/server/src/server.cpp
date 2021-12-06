@@ -139,5 +139,4 @@ void process_command(std::vector<std::string> &cmdlets, std::string command) {
         }
     }
     cmdlets.push_back(command);
-    fflush(stdout);
 }
