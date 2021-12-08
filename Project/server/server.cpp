@@ -29,6 +29,7 @@ bool openServer = true;
             fflush(stderr); \
         } \
 
+#include "util.h"
 #include "userprofile.h"
 #include "commands.h"
 #include "server.h"

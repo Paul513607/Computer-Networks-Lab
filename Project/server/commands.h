@@ -27,8 +27,9 @@ void process_command(std::vector<std::string> &cmdlets, std::string command) {
 std::vector<std::string> getUserTableLine(sqlite3 *user_db, std::string username) {
     std::vector<std::string> table_line;
     sqlite3_stmt *stmt;
-    std::string sel_query = "SELECT * FROM user_perm WHERE username = '" + username + "';";
-    sqlite3_prepare_v2(user_db, sel_query.c_str(), -1, &stmt, 0);
+    std::string select_query = "SELECT * FROM user_perm WHERE username = '" + username + "';";
+    sqlite3_prepare_v2(user_db, select_query.c_str(), -1, &stmt, 0);
+    select_query.clear();
     const unsigned char *tmp = NULL;
     std::string tmp_str;
     
@@ -82,14 +83,31 @@ public:
     virtual void Exec() = 0;
 };
 
-// Syntax: register <username> --- Lets a client register to the server and gives them only the read permission
-class RegisterCommand : public Command {
-private:
+// abstract class from which user specific commands classes are derived (like register, login, logout, update_perm, info_perm, remove)
+class UserCommand : public Command {
+protected:
     sqlite3 *user_db = nullptr;
 public:
     void setUserDBptr(sqlite3 *db) {
-        user_db = db;
+        this->user_db = db;
     }
+    virtual void Exec() = 0;
+};
+
+// abstract class from which repo specific commands classes are derived (like clone, commit, revert) // TODO : classes
+class RepoCommand : public Command {
+protected:
+    sqlite3 *repo_db = nullptr;
+public:
+    void setRepoDBptr(sqlite3 *db) {
+        this->repo_db = db;
+    }
+    virtual void Exec() = 0;
+};
+
+// Syntax: register <username> --- Lets a client register to the server and gives them only the read permission
+class RegisterCommand : public UserCommand {
+public:
     void Exec() override {  // register <username>
         if (user.isLogged()) {
             reply = "A user is already logged in. You can not register now!";
@@ -105,33 +123,29 @@ public:
         if (!table_line.empty()) {
             reply = "User " + argv[1] + " already registered!";
             sqlite3_close(user_db);
+            free_string_vector_memory(table_line);
             return;
         }
 
         insert_query = "INSERT INTO user_perm VALUES('" + argv[1] + "', 'r--');";   // add user to table with only read (clone) permission
         int ret = sqlite3_exec(user_db, insert_query.c_str(), NULL, NULL, &err_msg);
+        insert_query.clear();
         if (ret != SQLITE_OK) {
             std::cerr << "Error: " << err_msg;
             sqlite3_close(user_db);
+            free_string_vector_memory(table_line);
             return;
         }
     
         reply = "Succesfully registered user: \"" + argv[1] + "\"!";
-        for (auto i : table_line)
-            i.clear();
-        table_line.clear(); 
         sqlite3_close(user_db);
+        free_string_vector_memory(table_line);
     };
 };
 
 // Syntax: login <username> --- Lets a client log in to the server with a registered username - needed in order to execute commands on the repository
-class LoginCommand : public Command {
-private:
-    sqlite3 *user_db = nullptr;
+class LoginCommand : public UserCommand {
 public:
-    void setUserDBptr(sqlite3 *db) {
-        user_db = db;
-    }
     void Exec() override {
         if (user.isLogged()) {
             reply = "A user is already logged in!";
@@ -150,16 +164,14 @@ public:
 
         user.loginUser(table_line[0].c_str());
         user.setPermissions(table_line[1]);
-        for (auto i : table_line)
-            i.clear();
-        table_line.clear();
+        free_string_vector_memory(table_line);
         sqlite3_close(user_db);
         reply = "Succesfully logged in as: \"" + table_line[0] + "\"!";
     };
 };
 
 // Syntax: logout   --- Lets a client log out of the current session (only works if logged in)
-class LogoutCommand : public Command {
+class LogoutCommand : public UserCommand {
 public:
     void Exec() {
         if (user.isLogged()) {
@@ -173,13 +185,8 @@ public:
 };
 
 // Syntax: update_perm <username> <+/-><r|w|a>  --- Lets a client with administrator permissions update the permissions for other users (only works if logged in)
-class UpdatePermCommand : public Command {
-private:
-    sqlite3 *user_db = nullptr;
+class UpdatePermCommand : public UserCommand {
 public:
-    void setUserDBptr(sqlite3 *db) {
-        user_db = db;
-    }
     void Exec() override {
         if (user.isLogged()) {
             std::vector<std::string> table_line;
@@ -191,9 +198,7 @@ public:
                 table_line = getUserTableLine(user_db, argv[1]);
                 if (table_line.empty()) {
                     sqlite3_close(user_db);
-                    for (auto i : table_line)
-                        i.clear();
-                    table_line.clear();
+                    free_string_vector_memory(table_line);
                     reply = "User " + argv[1] + " is not registered.";
                     return;
                 }
@@ -227,9 +232,7 @@ public:
                 else {
                     reply = "Wrong format for this command. Syntax is: update_perm <username> <+/-><r|w|a>";
                     sqlite3_close(user_db);
-                    for (auto i : table_line)
-                        i.clear();
-                    table_line.clear();
+                    free_string_vector_memory(table_line);
                     perm_to_add.clear();
                     return;
                 }
@@ -238,20 +241,23 @@ public:
                 char *err_msg = const_cast<char *> ("Error at updating the database");
                 
                 int ret = sqlite3_exec(user_db, update_query.c_str(), NULL, NULL, &err_msg);
+                update_query.clear();
                 if (ret != SQLITE_OK) {
-                    std::cerr << "Error: " << err_msg;
+                    reply = err_msg;
+                    sqlite3_close(user_db);
+                    free_string_vector_memory(table_line);
+                    perm_to_add.clear();
+                    return;
                 }
 
                 reply = "Successfully updated permissions for user " + argv[1] + "!";
 
                 sqlite3_close(user_db);
-                for (auto i : table_line)
-                    i.clear();
-                table_line.clear();
+                free_string_vector_memory(table_line);
                 perm_to_add.clear();
             }
             else {
-                reply = "Only admins can update others' permissions!";
+                reply = "Only administrators can update others' permissions!";
             }
         }
         else {
@@ -261,7 +267,7 @@ public:
 };
 
 // Syntax: info_perm    // Lets a client see their permissions for the database (read, write or administrator) (only works if logged in)
-class InfoPermCommand : public Command {
+class InfoPermCommand : public UserCommand {
 public:
     void Exec() override {
         if (user.isLogged()) {
@@ -295,14 +301,33 @@ public:
     }
 };
 
-class DeleteUserCommand : public Command {  // TODO --- must be admin
-private:
-    sqlite3 *user_db;
+// Syntax: remove <username> // Lets a client with administrator permissions remove other users from the users database
+class RemoveUserCommand : public UserCommand {  // TODO --- must be admin
 public:
-    void setUserDBptr(sqlite3 *db) {
-        user_db = db;
-    }
     void Exec() override {
-    
+        if (user.isLogged()) {
+            if (user.getPermissions().find('a') != std::string::npos) {
+                sqlite3_open("./server/database/users.db", &user_db);
+                std::string delete_query = "DELETE FROM user_perm WHERE username = '" + argv[1] + "';";
+                char *err_msg = const_cast<char *> ("Error at updating the database");
+
+                int ret = sqlite3_exec(user_db, delete_query.c_str(), NULL, NULL, &err_msg);
+                delete_query.clear();
+                if (ret != SQLITE_OK) {
+                    reply = err_msg;
+                    sqlite3_close(user_db);
+                    return;
+                }
+
+                reply = "Successfully removed user " + argv[1] + "!";
+                sqlite3_close(user_db);
+            }
+            else {
+                reply = "Only administrators can remove other users from the database!";
+            }
+        }
+        else {
+            reply = "No user logged in.";
+        }
     }
 };

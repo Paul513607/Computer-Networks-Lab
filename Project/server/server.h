@@ -86,6 +86,9 @@ public:
         process_command(argv, command_store);
         reply_msg.clear();
 
+        if (argv[0] == "help" && argv.size() == 1) {
+            // TODO : help command;
+        }
         if (argv[0] == "register" && argv.size() == 2) {
             cmd = new RegisterCommand();
             cmd->setArguments(argv, user);
@@ -109,10 +112,17 @@ public:
             cmd = new InfoPermCommand();
             cmd->setArguments(argv, user);
         }
+        else if (argv[0] == "remove" && argv.size() == 2) {
+            cmd = new RemoveUserCommand();
+            cmd->setArguments(argv, user);
+            (static_cast<RemoveUserCommand *> (cmd))->setUserDBptr(user_db);
+        }
         else {
             reply_msg = "Unknown command. Specify 'help' for usage.";
+            free_string_vector_memory(argv);
             return false;
         }
+        free_string_vector_memory(argv);
         return true;
     }
 
