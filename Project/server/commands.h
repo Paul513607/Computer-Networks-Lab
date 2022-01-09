@@ -1,39 +1,21 @@
 #pragma once
 
-void trim_spaces_end_start(std::string &str) {
-    int index = str.find_first_not_of(" \n");
-    str.substr(index);
-    std::string copy = str;
-    reverse(copy.begin(), copy.end());
-    index = copy.find_first_not_of(" \n");
-    copy.substr(index);
-    reverse(copy.begin(), copy.end());
-    str = copy;
-    copy.clear();
-}
-
-void process_command(std::vector<std::string> &cmdlets, std::string command) {
-    int space_index = 0;
-    while (space_index != -1) {
-        space_index = command.find_first_of(' ');
-        if (space_index != -1) {
-            cmdlets.push_back(command.substr(0, space_index));
-            command.erase(0, space_index + 1);
-        }
-    }
-    cmdlets.push_back(command);
-}
+std::mutex mtx;
 
 std::vector<std::string> getUserTableLine(sqlite3 *user_db, std::string username) {
     std::vector<std::string> table_line;
     sqlite3_stmt *stmt;
     std::string select_query = "SELECT * FROM user_perm WHERE username = '" + username + "';";
-    sqlite3_prepare_v2(user_db, select_query.c_str(), -1, &stmt, 0);
+    int ret = sqlite3_prepare_v2(user_db, select_query.c_str(), -1, &stmt, 0);
+    if (ret)
+        std::cerr << "Error at sqlite3_prepare_v2: " << sqlite3_errmsg(user_db) << std::endl;
     select_query.clear();
     const unsigned char *tmp = NULL;
     std::string tmp_str;
     
-    sqlite3_step(stmt);
+    ret = sqlite3_step(stmt);
+    if (ret != SQLITE_ROW)
+        std::cout << "No entries for this query" << std::endl;
 
     tmp = sqlite3_column_text(stmt, 0);
     if (tmp == NULL) {
@@ -94,17 +76,6 @@ public:
     virtual void Exec() = 0;
 };
 
-// abstract class from which repo specific commands classes are derived (like clone, commit, revert) // TODO : classes
-class RepoCommand : public Command {
-protected:
-    sqlite3 *repo_db = nullptr;
-public:
-    void setRepoDBptr(sqlite3 *db) {
-        this->repo_db = db;
-    }
-    virtual void Exec() = 0;
-};
-
 // Syntax: register <username> --- Lets a client register to the server and gives them only the read permission
 class RegisterCommand : public UserCommand {
 public:
@@ -114,6 +85,7 @@ public:
             return;
         }
 
+        mtx.lock();
         std::vector<std::string> table_line;
         std::string insert_query;
         char *err_msg = const_cast<char *> ("Error at inserting into database");
@@ -140,6 +112,7 @@ public:
         reply = "Succesfully registered user: \"" + argv[1] + "\"!";
         sqlite3_close(user_db);
         free_string_vector_memory(table_line);
+        mtx.unlock();
     };
 };
 
@@ -151,6 +124,7 @@ public:
             reply = "A user is already logged in!";
             return;
         }
+        mtx.lock();
         std::vector<std::string> table_line;
 
         sqlite3_open("./server/database/users.db", &user_db);   // change paths later
@@ -167,6 +141,7 @@ public:
         free_string_vector_memory(table_line);
         sqlite3_close(user_db);
         reply = "Succesfully logged in as: \"" + table_line[0] + "\"!";
+        mtx.unlock();
     };
 };
 
@@ -188,6 +163,7 @@ public:
 class UpdatePermCommand : public UserCommand {
 public:
     void Exec() override {
+        mtx.lock();
         if (user.isLogged()) {
             std::vector<std::string> table_line;
             std::string perm_to_add = "";
@@ -263,6 +239,7 @@ public:
         else {
             reply = "No user logged in.";
         }
+        mtx.unlock();
     }
 };
 
@@ -270,10 +247,10 @@ public:
 class InfoPermCommand : public UserCommand {
 public:
     void Exec() override {
+        mtx.lock();
         if (user.isLogged()) {
             int ok = 0;
             std::string perm = user.getPermissions();
-            std::cout << "HAHA "; user.userPrint();
             reply = "Permissions for current user: ";
             if (perm.find('r') != std::string::npos) {
                 ok = 1;
@@ -298,13 +275,15 @@ public:
         else {
             reply = "No user logged in.";
         }
+        mtx.unlock();
     }
 };
 
 // Syntax: remove <username> // Lets a client with administrator permissions remove other users from the users database
-class RemoveUserCommand : public UserCommand {  // TODO --- must be admin
+class RemoveUserCommand : public UserCommand {
 public:
     void Exec() override {
+        mtx.lock();
         if (user.isLogged()) {
             if (user.getPermissions().find('a') != std::string::npos) {
                 sqlite3_open("./server/database/users.db", &user_db);
@@ -329,5 +308,259 @@ public:
         else {
             reply = "No user logged in.";
         }
+        mtx.unlock();
     }
+};
+
+// abstract class from which repo specific commands classes are derived (like clone, commit, revert) // TODO : classes
+class RepoCommand : public Command {
+protected:
+    sqlite3 *repo_db = nullptr;
+    int client;
+public:
+    void setClient(int client) {
+        this->client = client;
+    }
+    void setRepoDBptr(sqlite3 *db) {
+        this->repo_db = db;
+    }
+    int getLatestVersion() {
+        mtx.lock();
+        sqlite3_open("./server/database/file_system.db", &repo_db);
+
+        std::string query = "SELECT version FROM repo WHERE version = (SELECT MAX(version) FROM repo);";
+        sqlite3_stmt *stmt;
+
+        int ret = sqlite3_prepare_v2(repo_db, query.c_str(), query.length() + 1, &stmt, NULL);
+        if (ret)
+            std::cerr << "Error at sqlite3_prepare_v2: " << sqlite3_errmsg(repo_db) << std::endl;
+        
+        sqlite3_step(stmt);
+        int version = sqlite3_column_int(stmt, 0);
+
+        sqlite3_finalize(stmt);
+        sqlite3_close(repo_db);
+        mtx.unlock();
+        return version;
+    }
+    std::string getVersionHash(int version) {
+        mtx.lock();
+        sqlite3_open("./server/database/file_system.db", &repo_db);
+
+        std::string query = "SELECT hash FROM repo WHERE version = " + version + ';';
+        sqlite3_stmt *stmt;
+
+        std::cout << query << std::endl;
+
+        int ret = sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
+        if (ret)
+            std::cerr << "[1] Error at sqlite3_prepare_v2: " << sqlite3_errmsg(repo_db);
+        
+        sqlite3_step(stmt);
+        std::string hash;
+        int tmp_size = sqlite3_column_bytes(stmt, 0);
+        const unsigned char* tmp = sqlite3_column_text(stmt, 0);
+        hash.assign(tmp, tmp + tmp_size);
+
+        sqlite3_finalize(stmt);
+        sqlite3_close(repo_db);
+        mtx.unlock();
+        return hash;
+    }
+    std::string getVersionFS(int version) {
+        mtx.lock();
+        sqlite3_open("./server/database/file_system.db", &repo_db);
+
+        std::string query = "SELECT hash FROM repo WHERE version = " + version + ';';
+        sqlite3_stmt *stmt;
+
+        int ret = sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
+        if (ret)
+            std::cerr << "[2] Error at sqlite3_prepare_v2: " << sqlite3_errmsg(repo_db) << std::endl;
+        
+        sqlite3_step(stmt);
+        std::string fs;
+        int tmp_size = sqlite3_column_bytes(stmt, 0);
+        const unsigned char* tmp = (unsigned char*) sqlite3_column_blob(stmt, 0);
+        fs.assign(tmp, tmp + tmp_size);
+
+        sqlite3_finalize(stmt);
+        sqlite3_close(repo_db);
+        mtx.unlock();
+        return fs;
+    }
+    virtual void Exec() = 0;
+    friend class Server;
+};
+
+// Syntax: clone <repo_version> // Clones the repo's <repo_version> to the client's local storage
+class CloneCommand : public RepoCommand {
+public:
+    void Exec() override {
+        if (user.isLogged()) {
+            if (user.getPermissions().find('r') != std::string::npos || user.getPermissions().find('a') != std::string::npos) {
+                int version = atoi(argv[2].c_str());
+                std::string hash = getVersionHash(version);
+                std::string files = getVersionFS(version);
+
+                int fssize = files.size() + 1;
+                write(client, &fssize, sizeof(int));
+                write(client, files.c_str(), fssize);
+            }
+            else
+                reply = "Could not execute command. You need at least read permissions to execute this command";
+        }
+        else 
+            reply = "No user logged in";
+    };
+};
+
+// Syntax: commit -m <message> // Lets a client commit their local changes to to repository to the remore repository, also adds a commit message
+class CommitCommand : public RepoCommand {
+public:
+    void update_tables(int version, std::string hash, std::string patch, std::string old_files) {
+        mtx.lock();
+        sqlite3_open("./server/database/file_system.db", &repo_db);
+
+        std::string query = "INSERT INTO commits VALUES(" + std::to_string(version) + ", '" + hash +  "', '" + patch + "');";
+        sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
+
+        MatchPatch mp;
+        std::vector<File> patches, oldFiles, newFiles;
+        std::string new_files;
+        patches = unpack(patch);
+        oldFiles = unpack(old_files);
+        newFiles = mp.patch_files(patches, oldFiles);
+        new_files = pack(newFiles);
+        query = "INSERT INTO commits VALUES(" + std::to_string(version) + ", '" + hash +  "', '" + new_files + "');";
+        sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
+        sqlite3_close(repo_db);
+        mtx.unlock();
+    }
+
+    void Exec() override {
+        if (user.isLogged()) {
+            if (user.getPermissions().find('w') != std::string::npos || user.getPermissions().find('a') != std::string::npos) {
+
+                int latest_version = getLatestVersion();
+                std::string hash = getVersionHash(latest_version);
+                std::string old_files = getVersionFS(latest_version);
+
+                write(client, &latest_version, sizeof(int));
+
+                int hashlen = hash.length() + 1;
+                write(client, &hashlen, sizeof(int));
+                write(client, hash.c_str(), hashlen);
+
+                int fssize = old_files.size() + 1;
+                write(client, &fssize, sizeof(int));
+                write(client, old_files.c_str(), fssize);
+
+                int patchlen, new_hashlen;
+                char *patch_pack_c, *new_hash_c;
+                std::string patch_pack, new_hash;
+
+                read(client, &latest_version, sizeof(int));
+
+                read(client, &new_hashlen, sizeof(int));
+                new_hash_c = new char[new_hashlen];
+                read(client, &new_hash_c, new_hashlen);
+                new_hash = new_hash_c;
+                delete new_hash_c;
+
+                read(client, &patchlen, sizeof(int));
+                patch_pack_c = new char[patchlen];
+                read(client, &patch_pack_c, patchlen);
+                patch_pack = patch_pack_c;
+                delete patch_pack_c;
+
+                reply = "Command ok";
+
+                update_tables(latest_version, hash, patch_pack, old_files);
+            }
+            else {
+                reply = "Could not execute command. You need at least write permissions to execute this command";
+
+            }
+        }
+        else 
+            reply = "No user logged in";
+    };
+};
+
+// Syntax: revert <hash> // Lets a client (with admin permissions) revert the remote repository to a previous version
+class RevertCommand : public RepoCommand {
+public:
+    void Exec() override {
+        if (user.isLogged()) {
+            if (user.getPermissions().find('a') != std::string::npos) {
+                mtx.lock();
+                sqlite3_open("./server/database/file_system.db", &repo_db);
+                sqlite3_stmt *stmt;
+
+                std::string query = "DELETE FROM repo WHERE version > " + argv[2] + ";";
+                sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
+
+                query = "DELETE FROM commits WHERE version > " + argv[2] + ";";
+                sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
+                
+                sqlite3_close(repo_db);
+                mtx.unlock();
+            }
+            else
+                reply = "Could not execute command. You need administrator permissions to execute this command";
+        }
+        else 
+            reply = "No user logged in";
+    };
+};
+
+
+// Syntax: verhashlog // Lets a client see all commit hashes along with their commit messages
+class VersionHashLogCommand : public RepoCommand {
+public:
+    void Exec() override {
+        if (!user.isLogged()) {
+            reply = "No user logged in";
+            return;
+        }
+
+        mtx.lock();
+        sqlite3_open("./server/database/file_system.db", &repo_db);
+
+        std::string query = "SELECT version, hash FROM repo;";
+        sqlite3_stmt *stmt;
+
+        int ret = sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
+        if (ret)
+            std::cerr << "Error at sqlite3_prepare_v2: " << sqlite3_errmsg(repo_db) << std::endl;
+        
+        reply = "The repository's versions and hashes are:\n";
+        while (true) {
+            int ret = sqlite3_step(stmt);
+            if (ret == SQLITE_DONE)
+                break;
+            if (ret != SQLITE_ROW) {
+                std::cerr << "Error at sqlite_step: " << sqlite3_errmsg(repo_db);
+                break;
+            }
+            int version = sqlite3_column_int(stmt, 0);
+            std::string hash;
+            int tmp_size = sqlite3_column_bytes(stmt, 1);
+            const unsigned char* tmp = sqlite3_column_text(stmt, 1);
+            hash.assign(tmp, tmp + tmp_size);
+
+            std::cout << version << " " << hash << std::endl;
+
+            reply += "Version: ";
+            reply += std::to_string(version);
+            reply += ", Hash: ";
+            reply += hash;
+            reply += '\n';
+        }
+
+        sqlite3_finalize(stmt);
+        sqlite3_close(repo_db);
+        mtx.unlock();
+    };
 };

@@ -9,10 +9,11 @@ private:
     struct sockaddr_in from;
     socklen_t from_len = 0;
     std::string command_store, reply_msg;
+    int cmd_code;
 
     UserProfile user;
     Command *cmd = nullptr;
-    sqlite3 *user_db = nullptr;
+    sqlite3 *user_db = nullptr, *repo_db = nullptr;
 public:
     ~Server() {
         command_store.clear();
@@ -82,9 +83,10 @@ public:
     }
 
     bool processCmdline() {     // do necessary checks on the command --- child
-        std::vector<std::string> argv;  // TODO: sterge argv in caz de memory leaks
+        std::vector<std::string> argv;
         process_command(argv, command_store);
         reply_msg.clear();
+        cmd_code = 0;
 
         if (argv[0] == "help" && argv.size() == 1) {
             // TODO : help command;
@@ -117,6 +119,32 @@ public:
             cmd->setArguments(argv, user);
             (static_cast<RemoveUserCommand *> (cmd))->setUserDBptr(user_db);
         }
+        else if (argv[0] == "clone" && argv.size() == 2) {
+            cmd_code = 1;
+            cmd = new CloneCommand();
+            cmd->setArguments(argv, user);
+            (static_cast<CloneCommand *> (cmd))->setRepoDBptr(repo_db);
+            (static_cast<CloneCommand *> (cmd))->setClient(client);
+        }
+        else if (argv[0] == "commit" && argv.size() == 1) {
+            cmd_code = 2;
+            cmd = new CommitCommand();
+            cmd->setArguments(argv, user);
+            (static_cast<CommitCommand *> (cmd))->setRepoDBptr(repo_db);
+            (static_cast<CommitCommand *> (cmd))->setClient(client);
+        }
+        else if (argv[0] == "revert" && argv.size() == 2) {
+            cmd_code = 3;
+            cmd = new RevertCommand();
+            cmd->setArguments(argv, user);
+            (static_cast<RevertCommand *> (cmd))->setRepoDBptr(repo_db);
+            (static_cast<RevertCommand *> (cmd))->setClient(client);
+        }
+        else if (argv[0] == "verhashlog" && argv.size() == 1) {
+            cmd = new VersionHashLogCommand();
+            cmd->setArguments(argv, user);
+            (static_cast<VersionHashLogCommand *> (cmd))->setRepoDBptr(repo_db);
+        }
         else {
             reply_msg = "Unknown command. Specify 'help' for usage.";
             free_string_vector_memory(argv);
@@ -136,28 +164,29 @@ public:
     }
 
     bool sendResponse() {   // send a response back to a client  --- child
-        int msg_len = 0;
-        std::string msg;
+        if (cmd_code == 0) {
+            int msg_len = 0;
+            std::string msg;
 
-        msg = reply_msg;
-        msg_len = msg.length() + 1;
-        if (write(client, &msg_len, sizeof(int)) <= 0) {
+            msg = reply_msg;
+            msg_len = msg.length() + 1;
+            if (write(client, &msg_len, sizeof(int)) <= 0) {
+                msg.clear();
+                close(client);
+                close(sd);
+                handle_error_while("Error at write", err_counter_serv);
+                return false;
+            }
+            if (write(client, msg.c_str(), msg_len) <= 0) {
+                msg.clear();
+                close(client);
+                close(sd);
+                handle_error_while("Error at write", err_counter_serv);
+                return false;
+            }
+            std::cout << "[server child] Successfully sent response \"" << msg << "\"!" << std::endl;
             msg.clear();
-            close(client);
-            close(sd);
-            handle_error_while("Error at write", err_counter_serv);
-            return false;
         }
-        if (write(client, msg.c_str(), msg_len) <= 0) {
-            msg.clear();
-            close(client);
-            close(sd);
-            handle_error_while("Error at write", err_counter_serv);
-            return false;
-        }
-
-        std::cout << "[server child] Successfully sent response \"" << msg << "\"!" << std::endl;
-        msg.clear();
         return true;
     }
 
