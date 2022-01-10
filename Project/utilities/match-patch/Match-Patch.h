@@ -5,14 +5,14 @@
 
 class MatchPatch {
 public:
-    File make_patch(File newFile, File oldFile) {
+    File build_patch(File newFile, File oldFile) {
         diff_match_patch<std::string> funload;
         std::string content = funload.patch_toText(funload.patch_make(newFile.content, oldFile.content));
 
         return File(newFile.path, content, oldFile.st_mode);
     }
 
-    std::vector<File> make_patches(std::vector<File> newFiles, std::vector<File> oldFiles) {
+    std::vector<File> build_patches(std::vector<File> newFiles, std::vector<File> oldFiles) {
         std::vector<File> files;
         auto lambda_comp = [](File x, File y) {
             return x.path < y.path;
@@ -33,7 +33,7 @@ public:
                 oldBIt++;
             }
             else {  // File changed
-                files.push_back(make_patch(*newBIt, *oldBIt));
+                files.push_back(build_patch(*newBIt, *oldBIt));
                 newBIt++;
                 oldBIt++;
             }

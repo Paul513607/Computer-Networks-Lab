@@ -42,13 +42,13 @@ bool openSession = true;
 int main(int argc, char *argv[]) 
 {
     if (argc < 3) {
-        std::cout << "Syntax is: client.o <ip_address> <port>\n";
+        std::cout << "Syntax is: client.o <ip_address> <port>" << std::endl;
         exit(1);
     }
 
     Client client;
     client.initialize(argv[1], argv[2]);
-    client.readUsername();
+    // client.readUsername();
     client.connectToServer();
 
     while (openSession)

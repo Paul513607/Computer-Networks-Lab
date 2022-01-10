@@ -21,8 +21,7 @@
 
 int err_counter_serv = 0;
 bool openServer = true;
-#define PORT 2800
-#define MAX_BUFFER 1024
+#define PORT 4000
 
 #define handle_error(msg, err_counter_serv) { \
             perror(msg); \

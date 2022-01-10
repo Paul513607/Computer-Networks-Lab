@@ -89,13 +89,14 @@ public:
         std::vector<std::string> table_line;
         std::string insert_query;
         char *err_msg = const_cast<char *> ("Error at inserting into database");
-        sqlite3_open("./server/database/users.db", &user_db);      // change paths later
+        sqlite3_open("./database/users.db", &user_db);      // change paths later
 
         table_line = getUserTableLine(user_db, argv[1]);
         if (!table_line.empty()) {
             reply = "User " + argv[1] + " already registered!";
             sqlite3_close(user_db);
             free_string_vector_memory(table_line);
+            mtx.unlock();
             return;
         }
 
@@ -106,6 +107,7 @@ public:
             std::cerr << "Error: " << err_msg;
             sqlite3_close(user_db);
             free_string_vector_memory(table_line);
+            mtx.unlock();
             return;
         }
     
@@ -127,7 +129,7 @@ public:
         mtx.lock();
         std::vector<std::string> table_line;
 
-        sqlite3_open("./server/database/users.db", &user_db);   // change paths later
+        sqlite3_open("./database/users.db", &user_db);   // change paths later
 
         table_line = getUserTableLine(user_db, argv[1]);
         if (table_line.empty()) {
@@ -168,7 +170,7 @@ public:
             std::vector<std::string> table_line;
             std::string perm_to_add = "";
 
-            sqlite3_open("./server/database/users.db", &user_db);
+            sqlite3_open("./database/users.db", &user_db);
 
             if (user.getPermissions().find('a') != std::string::npos) {
                 table_line = getUserTableLine(user_db, argv[1]);
@@ -286,7 +288,7 @@ public:
         mtx.lock();
         if (user.isLogged()) {
             if (user.getPermissions().find('a') != std::string::npos) {
-                sqlite3_open("./server/database/users.db", &user_db);
+                sqlite3_open("./database/users.db", &user_db);
                 std::string delete_query = "DELETE FROM user_perm WHERE username = '" + argv[1] + "';";
                 char *err_msg = const_cast<char *> ("Error at updating the database");
 
@@ -326,7 +328,7 @@ public:
     }
     int getLatestVersion() {
         mtx.lock();
-        sqlite3_open("./server/database/file_system.db", &repo_db);
+        sqlite3_open("./database/file_system.db", &repo_db);
 
         std::string query = "SELECT version FROM repo WHERE version = (SELECT MAX(version) FROM repo);";
         sqlite3_stmt *stmt;
@@ -345,9 +347,9 @@ public:
     }
     std::string getVersionHash(int version) {
         mtx.lock();
-        sqlite3_open("./server/database/file_system.db", &repo_db);
+        sqlite3_open("./database/file_system.db", &repo_db);
 
-        std::string query = "SELECT hash FROM repo WHERE version = " + version + ';';
+        std::string query = "SELECT hash FROM repo WHERE version = " + std::to_string(version) + ';';
         sqlite3_stmt *stmt;
 
         std::cout << query << std::endl;
@@ -369,9 +371,9 @@ public:
     }
     std::string getVersionFS(int version) {
         mtx.lock();
-        sqlite3_open("./server/database/file_system.db", &repo_db);
+        sqlite3_open("./database/file_system.db", &repo_db);
 
-        std::string query = "SELECT hash FROM repo WHERE version = " + version + ';';
+        std::string query = "SELECT filesystem FROM repo WHERE version = " + std::to_string(version) + ';';
         sqlite3_stmt *stmt;
 
         int ret = sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
@@ -393,19 +395,48 @@ public:
     friend class Server;
 };
 
+// Syntax: init
+class InitCommand : public RepoCommand {
+public:
+    void Exec() override {
+        int version = 0;
+        char *errmsg;
+        std::string hash = receive_data(client);
+        std::string files_pack = receive_data(client);
+
+        mtx.lock();
+        sqlite3_open("./database/file_system.db", &repo_db);
+        sqlite3_stmt *stmt;
+        std::string query = "INSERT INTO repo VALUES(?, ?, ?);";
+        std::cout << query << std::endl;
+
+        sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
+
+        sqlite3_bind_int(stmt, 1, version);
+        sqlite3_bind_text(stmt, 2, hash.c_str(), hash.size(), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 3, &(*files_pack.begin()), files_pack.size(), SQLITE_STATIC);
+
+        sqlite3_step(stmt);
+
+        sqlite3_finalize(stmt);
+        sqlite3_close(repo_db);
+        mtx.unlock();
+    }
+};
+
 // Syntax: clone <repo_version> // Clones the repo's <repo_version> to the client's local storage
 class CloneCommand : public RepoCommand {
 public:
     void Exec() override {
+        std::cout << "HERE6 " << std::endl;
         if (user.isLogged()) {
             if (user.getPermissions().find('r') != std::string::npos || user.getPermissions().find('a') != std::string::npos) {
                 int version = atoi(argv[2].c_str());
+                std::cout << "AAA " << version << std::endl;
                 std::string hash = getVersionHash(version);
                 std::string files = getVersionFS(version);
 
-                int fssize = files.size() + 1;
-                write(client, &fssize, sizeof(int));
-                write(client, files.c_str(), fssize);
+                send_data(files, client);
             }
             else
                 reply = "Could not execute command. You need at least read permissions to execute this command";
@@ -420,7 +451,7 @@ class CommitCommand : public RepoCommand {
 public:
     void update_tables(int version, std::string hash, std::string patch, std::string old_files) {
         mtx.lock();
-        sqlite3_open("./server/database/file_system.db", &repo_db);
+        sqlite3_open("./database/file_system.db", &repo_db);
 
         std::string query = "INSERT INTO commits VALUES(" + std::to_string(version) + ", '" + hash +  "', '" + patch + "');";
         sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
@@ -446,33 +477,16 @@ public:
                 std::string hash = getVersionHash(latest_version);
                 std::string old_files = getVersionFS(latest_version);
 
-                write(client, &latest_version, sizeof(int));
+                send_data(std::to_string(latest_version), client);
+                send_data(hash, client);
+                send_data(old_files, client);
 
-                int hashlen = hash.length() + 1;
-                write(client, &hashlen, sizeof(int));
-                write(client, hash.c_str(), hashlen);
-
-                int fssize = old_files.size() + 1;
-                write(client, &fssize, sizeof(int));
-                write(client, old_files.c_str(), fssize);
-
-                int patchlen, new_hashlen;
-                char *patch_pack_c, *new_hash_c;
                 std::string patch_pack, new_hash;
 
                 read(client, &latest_version, sizeof(int));
-
-                read(client, &new_hashlen, sizeof(int));
-                new_hash_c = new char[new_hashlen];
-                read(client, &new_hash_c, new_hashlen);
-                new_hash = new_hash_c;
-                delete new_hash_c;
-
-                read(client, &patchlen, sizeof(int));
-                patch_pack_c = new char[patchlen];
-                read(client, &patch_pack_c, patchlen);
-                patch_pack = patch_pack_c;
-                delete patch_pack_c;
+                
+                new_hash = receive_data(client);
+                patch_pack = receive_data(client);
 
                 reply = "Command ok";
 
@@ -495,7 +509,7 @@ public:
         if (user.isLogged()) {
             if (user.getPermissions().find('a') != std::string::npos) {
                 mtx.lock();
-                sqlite3_open("./server/database/file_system.db", &repo_db);
+                sqlite3_open("./database/file_system.db", &repo_db);
                 sqlite3_stmt *stmt;
 
                 std::string query = "DELETE FROM repo WHERE version > " + argv[2] + ";";
@@ -505,6 +519,7 @@ public:
                 sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
                 
                 sqlite3_close(repo_db);
+                reply = "Successfully reverted the repository";
                 mtx.unlock();
             }
             else
@@ -526,7 +541,7 @@ public:
         }
 
         mtx.lock();
-        sqlite3_open("./server/database/file_system.db", &repo_db);
+        sqlite3_open("./database/file_system.db", &repo_db);
 
         std::string query = "SELECT version, hash FROM repo;";
         sqlite3_stmt *stmt;

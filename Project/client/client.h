@@ -10,7 +10,7 @@ private:
     int cmd_code;
 public:
     void initialize(char *ip_address, char *port) { // open the socket + initialize the database
-	    mkdir("repo", 777);
+	    mkdir("repo", 0777);
         this->port = atoi(port);
 
         if (-1 == (this->sd = socket(AF_INET, SOCK_STREAM, 0)))
@@ -45,19 +45,31 @@ public:
         std::cout << "[client] Successfully connected to the server!" << std::endl;
     }
 
+    void client_init() {
+        FileSystem fs;
+        MatchPatch mp;
+
+        std::vector<File> local_files = fs.get_nested_files_info("./repo");
+        std::string files_packed = pack(local_files);
+        std::string local_hash = fs.hasher->getHashFromString(files_packed);
+    
+        send_data(local_hash, sd);
+        send_data(files_packed, sd);
+
+        std::cout << "Successful init!" << std::endl;
+    }
+
     void client_clone() {
+        std::cout << "HERE3.5 " << std::endl;
         FileSystem fs;
 
-        int fssize;
-        char *files_c;
         std::string files_pack;
+        std::cout << "HERE3.75 " << std::endl;
         std::vector<File> repo = fs.get_nested_files_info("./repo");
+        std::cout << "HERE4 " << std::endl;
 
-        read(sd, &fssize, sizeof(int));
-        files_c = new char[fssize + 1];
-        read(sd, &files_c, fssize);
-        files_pack = files_c;
-        delete files_c;
+        files_pack = receive_data(sd);
+        std::cout << "HERE5 " << std::endl;
 
         std::vector<File> files = unpack(files_pack);
 
@@ -74,38 +86,28 @@ public:
         std::string files_packed = pack(local_files);
         std::string local_hash = fs.hasher->getHashFromString(files_packed);
     
-        int version, hashlen, fssize;
-        char *hash_c, *oldfs_c;
-        std::string hash, oldfs;
+        std::cout << "Starting to receive data..." << std::endl;
+        int version;
+        std::string ver, hash, oldfs;
 
-        read(sd, &version, sizeof(int));
+        ver = receive_data(sd);
+        version = atoi(ver.c_str());
         version++;
 
-        read(sd, &hashlen, sizeof(int));
-        hash_c = new char[hashlen + 1];
-        read(sd, &hash_c, hashlen);
-        hash = hash_c;
-        delete hash_c;
+        hash = receive_data(sd);
+        oldfs = receive_data(sd);
 
-        read(sd, &fssize, sizeof(int));
-        oldfs_c = new char[fssize + 1];
-        read(sd, &oldfs_c, fssize);
-        oldfs = oldfs_c;
-        delete oldfs_c;
+        std::cout << hash << " UUU " << oldfs << std::endl;
 
         std::vector<File> old_files = unpack(oldfs);
-        std::vector<File> patches = mp.make_patches(local_files, old_files);
+        std::vector<File> patches = mp.build_patches(local_files, old_files);
         std::string patch_pack = pack(patches);
 
         write(sd, &version, sizeof(int));
+    
+        send_data(local_hash, sd);
+        send_data(patch_pack, sd);
 
-        int local_hashlen = local_hash.length() + 1;
-        write(sd, &local_hashlen, sizeof(int));
-        write(sd, &local_hash, local_hashlen);
-
-        int patchlen = patch_pack.size() + 1;
-        write(sd, &patchlen, sizeof(int));
-        write(sd, &patch_pack, patchlen);
         std::cout << "Successful commit!" << std::endl;
     }
 
@@ -139,7 +141,7 @@ public:
             cmd_code = 1;
         else if (argv[0] == "commit" && argv.size() == 1)
             cmd_code = 2;
-        else if (argv[0] == "revert" && argv.size() == 2)
+        else if (argv[0] == "init" && argv.size() == 1)
             cmd_code = 3;
         command.clear();
     }
@@ -164,17 +166,30 @@ public:
             delete msg;
         }
         else {
-            switch (cmd_code)
-            {
-            case 1:
-                client_clone();
-                break;
-            case 2:
-                client_commit();
-            case 3:
-                client_revert();
-            default:
-                break;
+            if (cmd_code == 1) {
+                bool ok;
+                std::cout << "HERE1 \n";
+                read(sd, &ok, sizeof(bool));
+                std::cout << "HERE2 " << ok << std::endl;
+                if (ok) {
+                    std::cout << "HERE2.75 " << std::endl;
+                    client_clone();
+                    std::cout << "HERE3 " << std::endl;
+                }
+                else
+                    std::cout << "Either you are not logged in, or you don't have read permissions\n";
+            }
+            else if (cmd_code == 2) {
+                bool ok;
+                read(sd, &ok, sizeof(bool));
+                if (ok)
+                    client_commit();
+                else
+                    std::cout << "Either you are not logged in, or you don't have write permissions\n";
+
+            }
+            else if (cmd_code == 3) {
+                client_init();
             }
         }
     }

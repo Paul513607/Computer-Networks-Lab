@@ -86,12 +86,15 @@ public:
         std::vector<std::string> argv;
         process_command(argv, command_store);
         reply_msg.clear();
-        cmd_code = 0;
-
-        if (argv[0] == "help" && argv.size() == 1) {
-            // TODO : help command;
+        
+        if (argv[0] == "init" && argv.size() == 1) {
+            cmd_code = 3;
+            cmd = new InitCommand();
+            cmd->setArguments(argv, user);
+            (static_cast<InitCommand *> (cmd))->setRepoDBptr(repo_db);
+            (static_cast<InitCommand *> (cmd))->setClient(client);
         }
-        if (argv[0] == "register" && argv.size() == 2) {
+        else if (argv[0] == "register" && argv.size() == 2) {
             cmd = new RegisterCommand();
             cmd->setArguments(argv, user);
             (static_cast<RegisterCommand *> (cmd))->setUserDBptr(user_db);
@@ -134,7 +137,6 @@ public:
             (static_cast<CommitCommand *> (cmd))->setClient(client);
         }
         else if (argv[0] == "revert" && argv.size() == 2) {
-            cmd_code = 3;
             cmd = new RevertCommand();
             cmd->setArguments(argv, user);
             (static_cast<RevertCommand *> (cmd))->setRepoDBptr(repo_db);
@@ -146,7 +148,7 @@ public:
             (static_cast<VersionHashLogCommand *> (cmd))->setRepoDBptr(repo_db);
         }
         else {
-            reply_msg = "Unknown command. Specify 'help' for usage.";
+            reply_msg = "Unknown command";
             free_string_vector_memory(argv);
             return false;
         }
@@ -155,11 +157,16 @@ public:
     }
 
     void runCommand() {     // run the command --- child
+        cmd_code = 0;
+        std::cout << "BBB " << cmd_code << std::endl;
         if (processCmdline()) {
-            cmd->Exec();
-            reply_msg = cmd->GetReply();
-            user = cmd->GetUser();
-            delete cmd;
+            std::cout << "CCC " << cmd_code << std::endl;
+            if (cmd_code == 0) {
+                cmd->Exec();
+                reply_msg = cmd->GetReply();
+                user = cmd->GetUser();
+                delete cmd;
+            }
         }
     }
 
@@ -186,6 +193,44 @@ public:
             }
             std::cout << "[server child] Successfully sent response \"" << msg << "\"!" << std::endl;
             msg.clear();
+        }
+        else if (cmd_code == 1) {
+            bool ok = true;
+            if (!user.isLogged())
+                ok = false;
+            std::cout << "HERE1 " << ok << std::endl;
+            user.userPrint();
+            if (user.getPermissions().find('r') == std::string::npos)
+                ok = false;
+            std::cout << "HERE2 " << ok << std::endl;
+            write(client, &ok, sizeof(bool));
+            std::cout << "HERE3 " << ok << std::endl;
+
+            if (ok) {
+                std::cout << "HERE4 " << ok << std::endl;
+                cmd->Exec();
+                user = cmd->GetUser();
+                delete cmd;
+            }
+        }
+        else if (cmd_code == 2) {
+            bool ok = true;
+            if (!user.isLogged())
+                ok = false;
+            if (user.getPermissions().find('w') == std::string::npos)
+                ok = false;
+            write(client, &ok, sizeof(bool));
+
+            if (ok) {
+                cmd->Exec();
+                user = cmd->GetUser();
+                delete cmd;
+            }
+        }
+        else if (cmd_code == 3) {
+            cmd->Exec();
+            user = cmd->GetUser();
+            delete cmd;
         }
         return true;
     }

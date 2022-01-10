@@ -34,6 +34,7 @@ public:
                 std::string err_msg = "Error at reading file with path " + file_path;
                 std::cerr << err_msg << std::endl;
             }
+            file.setAttributes(file_path, buffer, st.st_mode, false);
         }
         else {
             std::cerr << "Error: Unknown file type for file with path " << file_path << std::endl;
@@ -43,7 +44,7 @@ public:
 
     void file_unload(File file) {
         if (file.isDirectory) {
-            mkdir(file.path.c_str(), file.st_mode);
+            mkdir(file.path.c_str(), 0777);
         }
         else {
             std::ofstream out(file.path);
@@ -54,21 +55,26 @@ public:
 
     void traverse_directory(std::string path, std::vector<std::string> &files) {
         DIR *dptr;
+        struct stat fst;
         struct dirent *in_dir;
         std::stack<std::string> st;
+        files.push_back(path);
         st.push(path);
 
         while (!st.empty()) {
             std::string top_path = st.top();
             st.pop();
+            stat(top_path.c_str(), &fst);
+            if (S_ISREG(fst.st_mode))
+                continue;
 
-            dptr = opendir(path.c_str());
+            dptr = opendir(top_path.c_str());
             if (dptr == NULL) {
                 std::cerr << "Error at opendir: " << errno;;
                 return;
             }
 
-            while (in_dir != NULL) {
+            while ((in_dir = readdir(dptr)) != NULL) {
                 if (strcmp(in_dir->d_name, ".") != 0 && strcmp(in_dir->d_name, "..") != 0) { // Avoid the current and parent directories
                     std::string child_path = top_path + "/" + in_dir->d_name;
                     files.push_back(child_path);
@@ -81,10 +87,12 @@ public:
     std::vector<File> get_nested_files_info(std::string og_path) {
         std::vector<File> files;
         std::vector<std::string> paths;
+
         traverse_directory(og_path, paths);
 
-        for (auto path : paths)
+        for (auto path : paths) {
             files.push_back(file_read(path));
+        }
 
         return files;
     }

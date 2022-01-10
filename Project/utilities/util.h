@@ -1,5 +1,7 @@
 #pragma once
 
+#define MAX_BUFFER 1024
+
 void free_string_vector_memory(std::vector<std::string> &arr) {
     for (auto i : arr)
         i.clear();
@@ -28,4 +30,54 @@ void process_command(std::vector<std::string> &cmdlets, std::string command) {
         }
     }
     cmdlets.push_back(command);
+}
+
+void send_data(std::string msg, int sd)
+{
+    int rd, msg_size = msg.size(), split = 0, bytes_toSend;
+    if ((rd = write(sd, &msg_size, sizeof(int))) < sizeof(int))
+        std::cerr << "Error at write size" << std::endl;
+    std::cout << "KKK " << msg_size << std::endl;
+	while (split < msg_size)
+	{
+        if (MAX_BUFFER < msg.size() - split) 
+            bytes_toSend = MAX_BUFFER;
+        else 
+            bytes_toSend = msg.size() - split;
+		if ((rd = write(sd, &(*msg.begin()) + split, bytes_toSend)) < 0)
+            std::cerr << "Error at write data" << std::endl;
+        std::cout << "LLL " << rd << std::endl;
+		split += rd;
+	}
+}
+
+std::string receive_data(int sd)
+{
+	std::string received_msg = "";
+	int rd, expected_bytes = 0, bytes_toReceive, ret = 0;
+	char *buff;
+    while (ret < sizeof(int)) {
+        if ((rd = read(sd, &expected_bytes + ret, sizeof(int) - ret)) < 0)
+            std::cerr << "Error at read size" << std::endl;
+        ret += rd;
+    }
+
+    std::cout << "KKK2 " << expected_bytes << std::endl;
+
+	while (received_msg.size() < expected_bytes)
+	{
+        if (MAX_BUFFER < expected_bytes - received_msg.size()) 
+            bytes_toReceive = MAX_BUFFER;
+        else 
+            bytes_toReceive = expected_bytes - received_msg.size();
+		buff = new char[MAX_BUFFER];
+        if ((rd = read(sd, buff, bytes_toReceive)) < 0)
+            std::cerr << "Error at read data" << std::endl;
+        std::cout << "YYY " << rd << std::endl;
+		std::string temp;
+		temp.assign(buff, buff + rd);
+        delete buff;
+		received_msg += temp;
+	}
+	return received_msg;
 }

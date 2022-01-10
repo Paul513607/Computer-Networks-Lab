@@ -24,6 +24,9 @@ public:
         this->st_mode = st_mode;
         this->isDirectory = isDirectory;
     }
+    void filePrint() {
+        std::cout << "File: " << path << " " << content << " " << st_mode << " " << isDirectory << std::endl;
+    }
     template <class Archive>
     void serialize(Archive & archive) {
         archive(path, content, st_mode, isDirectory);
