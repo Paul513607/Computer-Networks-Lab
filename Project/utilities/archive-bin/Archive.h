@@ -15,13 +15,13 @@ std::string pack(std::vector<File> files) {
     auto lambda_comp = [] (File x, File y) {
         return x.path < y.path;
     };
-    // std::cout << "PPP: \n";
-    // int size = 0;
-    // for (auto file : files) {
-    //     std::cout << "QQQ: " << file.path << " " << file.content << " " << file.st_mode << " " << file.isDirectory << ";";
-    //     size += file.path.size() + file.content.size() + sizeof(mode_t) + sizeof(bool);
-    // }
-    // std::cout << "Size: " << size << std::endl;
+    std::cout << "PPP: \n";
+    int size = 0;
+    for (auto file : files) {
+        std::cout << "QQQ: " << file.path << " " << file.content << " " << file.st_mode << " " << file.isDirectory << ";";
+        size += file.path.size() + file.content.size() + sizeof(mode_t) + sizeof(bool);
+    }
+    std::cout << "Size: " << size << std::endl;
     sort(files.begin(), files.end(), lambda_comp);
     {
         cereal::BinaryOutputArchive archive(sbuff);

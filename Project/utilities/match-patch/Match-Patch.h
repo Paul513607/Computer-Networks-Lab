@@ -29,7 +29,7 @@ public:
             else if (newBIt->path > oldBIt->path) { // Deleted file
                 File del_file;
                 del_file.setAttributes(oldBIt->path, "", oldBIt->st_mode, true);
-                files.push_back(del_file);
+                files.push_back(*oldBIt);
                 oldBIt++;
             }
             else {  // File changed
@@ -42,7 +42,7 @@ public:
         while(oldBIt != oldFiles.end()) { // Other deleted files
             File del_file;
             del_file.setAttributes(oldBIt->path, "", oldBIt->st_mode, true);
-            files.push_back(del_file);
+            files.push_back(*oldBIt);
             oldBIt++;
         }
 
@@ -66,6 +66,7 @@ public:
 
         std::vector<File>::iterator newBIt = newFiles.begin(), oldBIt= oldFiles.begin();
 
+        std::cout << "YES \n";
         while (newBIt != newFiles.end() && oldBIt != oldFiles.end()) {
             if (oldBIt->path > newBIt->path) { // No changes to old file
                 newBIt++;
@@ -73,7 +74,7 @@ public:
             else if (newBIt->path > oldBIt->path) { // Deleted file
                 File del_file;
                 del_file.setAttributes(oldBIt->path, "", oldBIt->st_mode, true);
-                files.push_back(del_file);
+                files.push_back(*oldBIt);
                 oldBIt++;
             }
             else {
@@ -82,13 +83,17 @@ public:
                 oldBIt++;
             }
         }
+        std::cout << "YES2 \n";
+
 
         while(oldBIt != oldFiles.end()) {
             File del_file;
             del_file.setAttributes(oldBIt->path, "", oldBIt->st_mode, true);
-            files.push_back(del_file);
+            files.push_back(*oldBIt);
             oldBIt++;
         }
+
+        std::cout << "YES3 \n";
 
         return files;
     }

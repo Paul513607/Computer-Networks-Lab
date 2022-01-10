@@ -1,5 +1,5 @@
 DROP TABLE repo;
 DROP TABLE commits;
 
-CREATE TABLE repo(version INTEGER PRIMARY KEY, hash VARCHAR2(256), filesystem BLOB);
-CREATE TABLE commits(version INTEGER PRIMARY KEY, hash VARCHAR2(256), patch BLOB);
+CREATE TABLE repo(version INTEGER, hash VARCHAR2(256) PRIMARY KEY, filesystem BLOB);
+CREATE TABLE commits(version INTEGER, hash VARCHAR2(256) PRIMARY KEY, patch BLOB);

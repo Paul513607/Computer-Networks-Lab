@@ -21,7 +21,7 @@
 
 int err_counter_serv = 0;
 bool openServer = true;
-#define PORT 4000
+#define PORT 3200
 
 #define handle_error(msg, err_counter_serv) { \
             perror(msg); \
@@ -45,7 +45,6 @@ bool openServer = true;
 #include "../utilities/file-system/file-system.h"
 #include "../utilities/archive-bin/Archive.h"
 #include "../utilities/match-patch/Match-Patch.h"
-#include "../utilities/repository/Repository.h"
 #include "../utilities/util.h"
 
 #include "userprofile.h"

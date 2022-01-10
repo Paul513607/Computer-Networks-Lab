@@ -10,7 +10,11 @@ private:
     int cmd_code;
 public:
     void initialize(char *ip_address, char *port) { // open the socket + initialize the database
-	    mkdir("repo", 0777);
+	    DIR *dptr = opendir("repo");
+        if (dptr)
+            closedir(dptr);
+        else
+            mkdir("repo", 0777);
         this->port = atoi(port);
 
         if (-1 == (this->sd = socket(AF_INET, SOCK_STREAM, 0)))
@@ -49,7 +53,15 @@ public:
         FileSystem fs;
         MatchPatch mp;
 
-        std::vector<File> local_files = fs.get_nested_files_info("./repo");
+        File main_dir;
+        char buff[512];
+        char *ch_ptr = getcwd(buff, 512);
+        std::string file_path = buff;
+        file_path += "/";
+        file_path += "repo";
+        main_dir.setAttributes(file_path, "", S_IFDIR, true);
+        std::vector<File> local_files;
+        local_files.push_back(main_dir);
         std::string files_packed = pack(local_files);
         std::string local_hash = fs.hasher->getHashFromString(files_packed);
     
@@ -65,7 +77,15 @@ public:
 
         std::string files_pack;
         std::cout << "HERE3.75 " << std::endl;
-        std::vector<File> repo = fs.get_nested_files_info("./repo");
+        
+        char buff[512];
+        char *ch_ptr = getcwd(buff, 512);
+        std::string file_path = buff;
+        file_path += "/";
+        file_path += "repo";
+        std::cout << "RRRRRRRRRRRRRRRRRRRRR " << file_path << std::endl;
+
+        std::vector<File> repo = fs.get_nested_files_info(file_path);
         std::cout << "HERE4 " << std::endl;
 
         files_pack = receive_data(sd);
@@ -73,7 +93,9 @@ public:
 
         std::vector<File> files = unpack(files_pack);
 
-
+        std::cout << "PPASDAS: \n";
+        for (auto file : files)
+            file.filePrint();
         fs.file_unload_multiple(files, repo);
         std::cout << "Successful clone!" << std::endl;
     }
@@ -82,7 +104,18 @@ public:
         FileSystem fs;
         MatchPatch mp;
 
-        std::vector<File> local_files = fs.get_nested_files_info("./repo");
+        char buff[512];
+        char *ch_ptr = getcwd(buff, 512);
+        std::string file_path = buff;
+        file_path += "/";
+        file_path += "repo";
+        std::cout << "RRRRRRRRRRRRRRRRRRRRR " << file_path << std::endl;
+
+        std::vector<File> local_files = fs.get_nested_files_info(file_path);
+        
+        std::cout << "Local: \n";
+        for (auto file : local_files)
+            file.filePrint();
         std::string files_packed = pack(local_files);
         std::string local_hash = fs.hasher->getHashFromString(files_packed);
     
@@ -100,13 +133,14 @@ public:
         std::cout << hash << " UUU " << oldfs << std::endl;
 
         std::vector<File> old_files = unpack(oldfs);
-        std::vector<File> patches = mp.build_patches(local_files, old_files);
+        std::vector<File> patches = mp.build_patches(old_files, local_files);
         std::string patch_pack = pack(patches);
 
         write(sd, &version, sizeof(int));
     
         send_data(local_hash, sd);
         send_data(patch_pack, sd);
+        std::cout << "Hash: " << local_hash << "\n Patch:" << patch_pack << std::endl;
 
         std::cout << "Successful commit!" << std::endl;
     }

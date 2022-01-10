@@ -68,19 +68,23 @@ public:
             if (S_ISREG(fst.st_mode))
                 continue;
 
+            
+
             dptr = opendir(top_path.c_str());
             if (dptr == NULL) {
                 std::cerr << "Error at opendir: " << errno;;
                 return;
             }
 
-            while ((in_dir = readdir(dptr)) != NULL) {
+            while ((in_dir = readdir(dptr))) {
                 if (strcmp(in_dir->d_name, ".") != 0 && strcmp(in_dir->d_name, "..") != 0) { // Avoid the current and parent directories
                     std::string child_path = top_path + "/" + in_dir->d_name;
                     files.push_back(child_path);
                     st.push(child_path);
                 }
             }
+
+            closedir(dptr);
         }
     }
 
@@ -92,6 +96,7 @@ public:
 
         for (auto path : paths) {
             files.push_back(file_read(path));
+            std::cout << path << " ";
         }
 
         return files;
@@ -119,7 +124,7 @@ public:
 
     void file_unload_multiple(std::vector<File> newFiles, std::vector<File> oldFiles) {
         // We sort the files alphabetically by path to make sure the directory comes before regular files
-        auto lambda_comp = [&](File x, File y) {
+        auto lambda_comp = [](File x, File y) {
             return x.path < y.path;
         };
         sort(newFiles.begin(), newFiles.end(), lambda_comp);

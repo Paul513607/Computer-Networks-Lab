@@ -408,7 +408,6 @@ public:
         sqlite3_open("./database/file_system.db", &repo_db);
         sqlite3_stmt *stmt;
         std::string query = "INSERT INTO repo VALUES(?, ?, ?);";
-        std::cout << query << std::endl;
 
         sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
 
@@ -431,18 +430,17 @@ public:
         std::cout << "HERE6 " << std::endl;
         if (user.isLogged()) {
             if (user.getPermissions().find('r') != std::string::npos || user.getPermissions().find('a') != std::string::npos) {
-                int version = atoi(argv[2].c_str());
-                std::cout << "AAA " << version << std::endl;
+                int version = atoi(argv[1].c_str());
                 std::string hash = getVersionHash(version);
                 std::string files = getVersionFS(version);
 
                 send_data(files, client);
             }
             else
-                reply = "Could not execute command. You need at least read permissions to execute this command";
+                std::cout << "Could not execute command. You need at least read permissions to execute this command\n";
         }
         else 
-            reply = "No user logged in";
+            std::cout << "No user logged in\n";
     };
 };
 
@@ -453,18 +451,46 @@ public:
         mtx.lock();
         sqlite3_open("./database/file_system.db", &repo_db);
 
-        std::string query = "INSERT INTO commits VALUES(" + std::to_string(version) + ", '" + hash +  "', '" + patch + "');";
-        sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
+        sqlite3_stmt *stmt;
+        std::string query = "INSERT INTO commits VALUES(?, ?, ?);";
+
+        sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
+
+        sqlite3_bind_int(stmt, 1, version);
+        sqlite3_bind_text(stmt, 2, hash.c_str(), hash.size(), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 3, &(*patch.begin()), patch.size(), SQLITE_STATIC);
+
+        sqlite3_step(stmt);
+
+        sqlite3_finalize(stmt);
 
         MatchPatch mp;
         std::vector<File> patches, oldFiles, newFiles;
         std::string new_files;
         patches = unpack(patch);
         oldFiles = unpack(old_files);
-        newFiles = mp.patch_files(patches, oldFiles);
+        for (auto patc : patches)
+            patc.filePrint();
+        for (auto file : oldFiles)
+            file.filePrint();
+        
+        std::cout << "I WAS HERE \n";
+        newFiles = mp.patch_files(oldFiles, patches);
         new_files = pack(newFiles);
-        query = "INSERT INTO commits VALUES(" + std::to_string(version) + ", '" + hash +  "', '" + new_files + "');";
-        sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
+        query = "INSERT INTO repo VALUES(?, ?, ?);";
+        
+        std::cout << "I WAS HERE2 \n";
+
+        sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
+
+        sqlite3_bind_int(stmt, 1, version);
+        sqlite3_bind_text(stmt, 2, hash.c_str(), hash.size(), SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 3, &(*new_files.begin()), new_files.size(), SQLITE_STATIC);
+
+        sqlite3_step(stmt);
+
+        sqlite3_finalize(stmt);
+
         sqlite3_close(repo_db);
         mtx.unlock();
     }
@@ -487,10 +513,11 @@ public:
                 
                 new_hash = receive_data(client);
                 patch_pack = receive_data(client);
+                std::cout << "Hash: " << new_hash << "\n Patch:" << patch_pack << std::endl;
 
                 reply = "Command ok";
 
-                update_tables(latest_version, hash, patch_pack, old_files);
+                update_tables(latest_version, new_hash, patch_pack, old_files);
             }
             else {
                 reply = "Could not execute command. You need at least write permissions to execute this command";
@@ -502,7 +529,7 @@ public:
     };
 };
 
-// Syntax: revert <hash> // Lets a client (with admin permissions) revert the remote repository to a previous version
+// Syntax: revert <version> // Lets a client (with admin permissions) revert the remote repository to a previous version
 class RevertCommand : public RepoCommand {
 public:
     void Exec() override {
@@ -512,10 +539,10 @@ public:
                 sqlite3_open("./database/file_system.db", &repo_db);
                 sqlite3_stmt *stmt;
 
-                std::string query = "DELETE FROM repo WHERE version > " + argv[2] + ";";
+                std::string query = "DELETE FROM repo WHERE version > " + argv[1] + ";";
                 sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
 
-                query = "DELETE FROM commits WHERE version > " + argv[2] + ";";
+                query = "DELETE FROM commits WHERE version > " + argv[1] + ";";
                 sqlite3_exec(repo_db, query.c_str(), NULL, NULL, NULL);
                 
                 sqlite3_close(repo_db);

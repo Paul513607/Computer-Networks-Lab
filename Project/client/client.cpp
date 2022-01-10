@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -34,7 +35,6 @@ bool openSession = true;
 #include "../utilities/file-system/file-system.h"
 #include "../utilities/archive-bin/Archive.h"
 #include "../utilities/match-patch/Match-Patch.h"
-#include "../utilities/repository/Repository.h"
 #include "../utilities/util.h"
 
 #include "client.h"
