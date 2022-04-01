@@ -129,7 +129,7 @@ public:
         mtx.lock();
         std::vector<std::string> table_line;
 
-        sqlite3_open("./database/users.db", &user_db);   // change paths later
+        sqlite3_open("./database/users.db", &user_db); 
 
         table_line = getUserTableLine(user_db, argv[1]);
         if (table_line.empty()) {
@@ -352,8 +352,6 @@ public:
         std::string query = "SELECT hash FROM repo WHERE version = " + std::to_string(version) + ';';
         sqlite3_stmt *stmt;
 
-        std::cout << query << std::endl;
-
         int ret = sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
         if (ret)
             std::cerr << "[1] Error at sqlite3_prepare_v2: " << sqlite3_errmsg(repo_db);
@@ -395,7 +393,7 @@ public:
     friend class Server;
 };
 
-// Syntax: init
+// Syntax: init -- initialize the repo
 class InitCommand : public RepoCommand {
 public:
     void Exec() override {
@@ -427,10 +425,15 @@ public:
 class CloneCommand : public RepoCommand {
 public:
     void Exec() override {
-        std::cout << "HERE6 " << std::endl;
         if (user.isLogged()) {
             if (user.getPermissions().find('r') != std::string::npos || user.getPermissions().find('a') != std::string::npos) {
+                bool ver_ok;
                 int version = atoi(argv[1].c_str());
+                if (version < 0 || version > getLatestVersion())
+                    ver_ok = false;
+                else 
+                    ver_ok = true;
+                write(client, &ver_ok, sizeof(bool));
                 std::string hash = getVersionHash(version);
                 std::string files = getVersionFS(version);
 
@@ -444,7 +447,7 @@ public:
     };
 };
 
-// Syntax: commit -m <message> // Lets a client commit their local changes to to repository to the remore repository, also adds a commit message
+// Syntax: commit // Lets a client commit their local changes to to repository to the remore repository
 class CommitCommand : public RepoCommand {
 public:
     void update_tables(int version, std::string hash, std::string patch, std::string old_files) {
@@ -469,18 +472,11 @@ public:
         std::string new_files;
         patches = unpack(patch);
         oldFiles = unpack(old_files);
-        for (auto patc : patches)
-            patc.filePrint();
-        for (auto file : oldFiles)
-            file.filePrint();
         
-        std::cout << "I WAS HERE \n";
         newFiles = mp.patch_files(oldFiles, patches);
         new_files = pack(newFiles);
         query = "INSERT INTO repo VALUES(?, ?, ?);";
         
-        std::cout << "I WAS HERE2 \n";
-
         sqlite3_prepare_v2(repo_db, query.c_str(), -1, &stmt, NULL);
 
         sqlite3_bind_int(stmt, 1, version);
@@ -513,7 +509,6 @@ public:
                 
                 new_hash = receive_data(client);
                 patch_pack = receive_data(client);
-                std::cout << "Hash: " << new_hash << "\n Patch:" << patch_pack << std::endl;
 
                 reply = "Command ok";
 
@@ -536,6 +531,7 @@ public:
         if (user.isLogged()) {
             if (user.getPermissions().find('a') != std::string::npos) {
                 mtx.lock();
+                int version = atoi(argv[1].c_str());
                 sqlite3_open("./database/file_system.db", &repo_db);
                 sqlite3_stmt *stmt;
 

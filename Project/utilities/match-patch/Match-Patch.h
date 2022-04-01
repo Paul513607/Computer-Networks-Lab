@@ -66,7 +66,6 @@ public:
 
         std::vector<File>::iterator newBIt = newFiles.begin(), oldBIt= oldFiles.begin();
 
-        std::cout << "YES \n";
         while (newBIt != newFiles.end() && oldBIt != oldFiles.end()) {
             if (oldBIt->path > newBIt->path) { // No changes to old file
                 newBIt++;
@@ -83,8 +82,6 @@ public:
                 oldBIt++;
             }
         }
-        std::cout << "YES2 \n";
-
 
         while(oldBIt != oldFiles.end()) {
             File del_file;
@@ -92,8 +89,6 @@ public:
             files.push_back(*oldBIt);
             oldBIt++;
         }
-
-        std::cout << "YES3 \n";
 
         return files;
     }

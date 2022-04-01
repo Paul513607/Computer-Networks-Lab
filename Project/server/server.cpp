@@ -21,7 +21,7 @@
 
 int err_counter_serv = 0;
 bool openServer = true;
-#define PORT 3200
+#define PORT 3300
 
 #define handle_error(msg, err_counter_serv) { \
             perror(msg); \

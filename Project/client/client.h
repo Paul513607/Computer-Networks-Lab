@@ -72,30 +72,22 @@ public:
     }
 
     void client_clone() {
-        std::cout << "HERE3.5 " << std::endl;
         FileSystem fs;
 
         std::string files_pack;
-        std::cout << "HERE3.75 " << std::endl;
         
         char buff[512];
         char *ch_ptr = getcwd(buff, 512);
         std::string file_path = buff;
         file_path += "/";
         file_path += "repo";
-        std::cout << "RRRRRRRRRRRRRRRRRRRRR " << file_path << std::endl;
 
         std::vector<File> repo = fs.get_nested_files_info(file_path);
-        std::cout << "HERE4 " << std::endl;
 
         files_pack = receive_data(sd);
-        std::cout << "HERE5 " << std::endl;
 
         std::vector<File> files = unpack(files_pack);
 
-        std::cout << "PPASDAS: \n";
-        for (auto file : files)
-            file.filePrint();
         fs.file_unload_multiple(files, repo);
         std::cout << "Successful clone!" << std::endl;
     }
@@ -109,13 +101,9 @@ public:
         std::string file_path = buff;
         file_path += "/";
         file_path += "repo";
-        std::cout << "RRRRRRRRRRRRRRRRRRRRR " << file_path << std::endl;
 
         std::vector<File> local_files = fs.get_nested_files_info(file_path);
         
-        std::cout << "Local: \n";
-        for (auto file : local_files)
-            file.filePrint();
         std::string files_packed = pack(local_files);
         std::string local_hash = fs.hasher->getHashFromString(files_packed);
     
@@ -130,7 +118,6 @@ public:
         hash = receive_data(sd);
         oldfs = receive_data(sd);
 
-        std::cout << hash << " UUU " << oldfs << std::endl;
 
         std::vector<File> old_files = unpack(oldfs);
         std::vector<File> patches = mp.build_patches(old_files, local_files);
@@ -140,7 +127,6 @@ public:
     
         send_data(local_hash, sd);
         send_data(patch_pack, sd);
-        std::cout << "Hash: " << local_hash << "\n Patch:" << patch_pack << std::endl;
 
         std::cout << "Successful commit!" << std::endl;
     }
@@ -201,26 +187,30 @@ public:
         }
         else {
             if (cmd_code == 1) {
-                bool ok;
-                std::cout << "HERE1 \n";
+                bool ok, ver_ok;
                 read(sd, &ok, sizeof(bool));
-                std::cout << "HERE2 " << ok << std::endl;
                 if (ok) {
-                    std::cout << "HERE2.75 " << std::endl;
-                    client_clone();
-                    std::cout << "HERE3 " << std::endl;
+                    read(sd, &ver_ok, sizeof(bool));
+                    if (ver_ok) {
+                        client_clone();
+                    }
+                    else {
+                        std::cout << "Wrong version" << std::endl;
+                    }
                 }
                 else
-                    std::cout << "Either you are not logged in, or you don't have read permissions\n";
+                    std::cout << "Either you are not logged in, you don't have read permissions, or the version you are trying to clone is not available\n";
             }
             else if (cmd_code == 2) {
                 bool ok;
                 read(sd, &ok, sizeof(bool));
-                if (ok)
-                    client_commit();
-                else
-                    std::cout << "Either you are not logged in, or you don't have write permissions\n";
 
+                if (ok) {
+                        client_commit();
+                }
+                else {
+                    std::cout << "Either you are not logged in, or you don't have write permissions" << std::endl;
+                }
             }
             else if (cmd_code == 3) {
                 client_init();

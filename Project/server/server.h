@@ -158,9 +158,7 @@ public:
 
     void runCommand() {     // run the command --- child
         cmd_code = 0;
-        std::cout << "BBB " << cmd_code << std::endl;
         if (processCmdline()) {
-            std::cout << "CCC " << cmd_code << std::endl;
             if (cmd_code == 0) {
                 cmd->Exec();
                 reply_msg = cmd->GetReply();
@@ -198,16 +196,12 @@ public:
             bool ok = true;
             if (!user.isLogged())
                 ok = false;
-            std::cout << "HERE1 " << ok << std::endl;
             user.userPrint();
             if (user.getPermissions().find('r') == std::string::npos)
                 ok = false;
-            std::cout << "HERE2 " << ok << std::endl;
             write(client, &ok, sizeof(bool));
-            std::cout << "HERE3 " << ok << std::endl;
 
             if (ok) {
-                std::cout << "HERE4 " << ok << std::endl;
                 cmd->Exec();
                 user = cmd->GetUser();
                 delete cmd;
